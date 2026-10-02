@@ -14,6 +14,11 @@ ERRORS=0
 echo "--> Validating shell scripts with bash -n..."
 for script in "${PROJECT_ROOT}/scripts"/*; do
   if [ -f "$script" ]; then
+    case "$script" in
+      *.ts|*.js|*.json|*.md)
+        continue
+        ;;
+    esac
     if ! bash -n "$script"; then
       echo "  [FAIL] Shell syntax error in: $script"
       ERRORS=$((ERRORS + 1))
@@ -37,9 +42,16 @@ fi
 # 3. Check for Non-Executable Scripts in scripts/
 echo "--> Checking scripts execution bit..."
 for script in "${PROJECT_ROOT}/scripts"/*; do
-  if [ -f "$script" ] && [ ! -x "$script" ]; then
-    echo "  [FAIL] Script is not executable: $script"
-    ERRORS=$((ERRORS + 1))
+  if [ -f "$script" ]; then
+    case "$script" in
+      *.ts|*.js|*.json|*.md)
+        continue
+        ;;
+    esac
+    if [ ! -x "$script" ]; then
+      echo "  [FAIL] Script is not executable: $script"
+      ERRORS=$((ERRORS + 1))
+    fi
   fi
 done
 
