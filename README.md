@@ -4,6 +4,8 @@
 > **Department**: Department of Computer Science and Engineering
 > **Team**: Team 07 (Theme 01)
 > **Repository**: [VAIBHAV7848/mini-project](https://github.com/VAIBHAV7848/mini-project)
+>
+> **Source of Truth Statement**: Official team project documents are the authoritative source of project requirements and scope. `README.md` is public project documentation derived from the authoritative project materials.
 
 ---
 
@@ -18,23 +20,23 @@ Traditional gig platforms rely on centralized, opaque dispute mechanisms that ju
 This platform resolves this dilemma through a **Milestone-Based Escrow and Evidence-Based Dispute Resolution Workflow**:
 - **Milestone-Based Escrow**: Contracts are partitioned into sequential, funded milestones. Client deposits are locked in a simulated double-entry ledger before work begins. Funds are released atomically per milestone only upon explicit client approval or upon expiration of an automated 7-calendar-day review window (`REVIEW_TIMEOUT`), preventing developer payment starvation.
 - **Evidence-Based Dispute Resolution**: When deliverables are contested, both parties submit cryptographic evidence (SHA-256 deliverable checksums, technical specifications, and communication logs). An in-memory Merkle Evidence Tree links all artifacts, enabling independent human dispute reviewers to inspect tamper-evident proof and issue binding rulings (full release, refund, or split settlement).
-- **Deterministic AI Semantic Matching**: Freelancer proposals are ranked against client project requirements using a multi-attribute heuristic algorithm evaluating skill tag overlap (Jaccard similarity, 50% weight), budget alignment (30% weight), and developer reputation scores (20% weight).
+- **Deterministic Heuristic Proposal Matching (FR-11)**: Freelancer proposals are ranked against client project requirements using a multi-attribute heuristic algorithm evaluating skill tag overlap (Jaccard similarity, 50% weight), budget alignment (30% weight), and developer reputation scores (20% weight) per ADR-010.
 
 ---
 
 ## 2. Key Features
 
-- **Role-Based Access Control (RBAC)**: Dedicated server-enforced interfaces for Clients, Freelancers, Dispute Reviewers, and Administrators.
+- **Role-Based Access Control (RBAC)**: Dedicated server-enforced interfaces for Clients, Freelancers, Dispute Reviewers, and Administrators (FR-07, FR-08, NFR-02).
 - **Project & Service Marketplace**: Clients post custom projects with skill tags; freelancers publish tiered service gigs (`Basic`, `Standard`, `Premium`).
-- **Proposal Bidding & Heuristic Matching**: Objective proposal ranking powered by deterministic semantic multi-attribute scoring.
-- **Milestone Sequencing & Contract Lifecycle**: Phased milestone execution enforcing strict sequential dependencies (milestone $K+1$ cannot start until prior milestones resolve).
-- **Simulated ACID Escrow Ledger**: Double-entry accounting enforcing mathematical balance conservation: $\Delta\text{Escrow} + \Delta\text{User} = 0$.
-- **Automated Watchdog Review Timeout**: Automated 7-calendar-day review window scheduler transitioning overdue reviews to `REVIEW_TIMEOUT` and triggering escrow release.
-- **Cryptographic SHA-256 Deliverable Checksumming**: Streaming digest computation for all submitted deliverable artifacts.
-- **Hierarchical Merkle Evidence Trees**: In-memory N-ary tree data structure enabling $O(V+E)$ traversal and immediate single-bit tampering detection.
-- **Human Reviewer Arbitration**: Independent dispute resolution workflow supporting binding split rulings with duplicate ruling prevention.
-- **Tamper-Resistant Chained Audit Logging**: Append-only audit trail where every state change and financial transfer is cryptographically linked: $\text{Hash}_n = \text{SHA256}(\text{Hash}_{n-1} + \text{Event Data})$.
-- **Real-Time State Synchronization**: 5-second lightweight polling snapshot returning active contract and milestone states without full-page reloads.
+- **Proposal Bidding & Heuristic Matching (FR-11)**: Objective proposal ranking powered by deterministic multi-attribute scoring (Jaccard skill overlap, budget ratio fit, developer reputation score).
+- **Milestone Sequencing & Contract Lifecycle (FR-02, FR-12)**: Phased milestone execution enforcing strict sequential dependencies (milestone $K+1$ cannot start until prior milestones resolve).
+- **Simulated ACID Escrow Ledger (FR-01, FR-05, NFR-08)**: Double-entry accounting enforcing mathematical balance conservation: $\Delta\text{Escrow} + \Delta\text{User} = 0$.
+- **Automated Watchdog Review Timeout (FR-02, D-02)**: Automated 7-calendar-day review window scheduler transitioning overdue reviews to `REVIEW_TIMEOUT` and triggering escrow release.
+- **Cryptographic SHA-256 Deliverable Checksumming (FR-03, NFR-03)**: Streaming digest computation for all submitted deliverable artifacts.
+- **Hierarchical Merkle Evidence Trees (FR-04)**: In-memory N-ary tree data structure enabling $O(V+E)$ traversal and immediate single-bit tampering detection.
+- **Human Reviewer Arbitration (FR-09)**: Independent dispute resolution workflow supporting binding split rulings with duplicate ruling prevention.
+- **Tamper-Resistant Chained Audit Logging (FR-06, NFR-09)**: Append-only audit trail where every state change and financial transfer is cryptographically linked: $\text{Hash}_n = \text{SHA256}(\text{Payload}_n + \text{Hash}_{n-1})$.
+- **Client State Synchronization (FR-10)**: 5-second lightweight polling snapshot returning active contract and milestone states without full-page reloads.
 
 ---
 
@@ -133,12 +135,12 @@ Append-only cryptographic SHA-256 chained audit log records every event
 
 ## 7. Security Architecture
 
-- **Server-Side RBAC Enforcement**: Role permissions (`CLIENT`, `FREELANCER`, `REVIEWER`, `ADMIN`) are strictly enforced within server-side API route handlers via `RbacEnforcer`. Frontend tabs are visual routing conveniences; direct unauthorized requests return HTTP 401/403.
+- **Server-Side RBAC Enforcement (NFR-02)**: Role permissions (`CLIENT`, `FREELANCER`, `REVIEWER`, `ADMIN`) are strictly enforced within server-side API route handlers via `RbacEnforcer`. Frontend tabs are visual routing conveniences; direct unauthorized requests return HTTP 401/403.
 - **Session Token Integrity**: Session tokens utilize HMAC-SHA256 signatures verified with timing-safe comparisons (`SessionService`), preventing signature tampering and replay attacks.
-- **Defensive Input Validation**: All API route inputs are validated against strict Zod 4 schemas prior to database operations. Malformed payloads return standardized HTTP 400 envelopes.
+- **Defensive Input Validation (NFR-04)**: All API route inputs are validated against strict Zod 4 schemas prior to database operations. Malformed payloads return standardized HTTP 400 envelopes.
 - **Cross-Tenant IDOR Mitigation**: Contract, milestone, and deliverable operations enforce tenant ownership checks against database foreign keys before executing mutations.
-- **Cryptographic Evidence Checksums**: Deliverable code files and dispute evidence items are hashed using streaming SHA-256. Any modification to an uploaded artifact invalidates the Merkle root hash.
-- **Append-Only Chained Audit Trail**: Every financial movement and FSM state transition creates an audit log entry cryptographically linked to the previous entry, providing verifiable historical immutability.
+- **Cryptographic Evidence Checksums (NFR-03)**: Deliverable code files and dispute evidence items are hashed using streaming SHA-256. Any modification to an uploaded artifact invalidates the Merkle root hash.
+- **Append-Only Chained Audit Trail (NFR-09)**: Every financial movement and FSM state transition creates an audit log entry cryptographically linked to the previous entry, providing verifiable historical immutability.
 
 Detailed security documentation:
 - [Security Policy](SECURITY.md)
@@ -181,29 +183,45 @@ npm run build
 
 ## 9. Performance & Benchmarking
 
-Empirical benchmarks executed against the production SQLite WAL database engine and Next.js route handlers are recorded in [Performance Results](docs/development/performance-results.md):
+Empirical benchmarks executed against the SQLite WAL database engine and Next.js route handlers are recorded in [Performance Results](docs/development/performance-results.md):
 
-### NFR-01: API Latency under Concurrency (50 Concurrent Workers, 500 Requests)
-| Route | Concurrency | Throughput | $P_{50}$ (ms) | $P_{95}$ (ms) | Target KPI | Status |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `GET /api/projects` | 50 | 674.7 req/s | 48.96 | **74.07** | $\le 500.0\text{ ms}$ | **PASS** |
-| `GET /api/gigs` | 50 | 7,455.3 req/s | 5.03 | **7.17** | $\le 500.0\text{ ms}$ | **PASS** |
-| `GET /api/contracts` *(Auth)* | 50 | 5,247.0 req/s | 6.70 | **9.84** | $\le 500.0\text{ ms}$ | **PASS** |
+### NFR-01: Performance — API Latency under Concurrency (50 Concurrent Workers, 500 Requests)
 
-### NFR-09: 100,000 Audit Log Retrieval Latency
+- **Quality Attribute**: Performance (`docs/requirements/non-functional-requirements.md`)
+- **Approved Target KPI**: $P_{95}\text{ latency} \le 500.0\text{ ms}$ across all API endpoints (Workload condition: 50 concurrent requests on local benchmark dataset)
+- **Verification Methodology**: Automated load runner (`scripts/benchmark-load.ts`) executing 50 simultaneous parallel workers across 1,500 total requests
+
+| Route | Concurrency | Total Requests | Throughput | $P_{50}$ (ms) | $P_{95}$ (ms) | Target KPI | Status |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /api/projects` | 50 | 500 | 674.7 req/s | 48.96 | **74.07** | $\le 500.0\text{ ms}$ | **PASS** |
+| `GET /api/gigs` | 50 | 500 | 7,455.3 req/s | 5.03 | **7.17** | $\le 500.0\text{ ms}$ | **PASS** |
+| `GET /api/contracts` *(Auth)* | 50 | 500 | 5,247.0 req/s | 6.70 | **9.84** | $\le 500.0\text{ ms}$ | **PASS** |
+
+### NFR-09: Auditability — 100,000 Record Audit Retrieval Benchmark
+
+- **Quality Attribute**: Auditability (`docs/requirements/non-functional-requirements.md`)
+- **Approved Target KPI**: 100% of state transitions captured in append-only audit log
+- **Empirical Scale Benchmark**: Query retrieval latency over 100,000 cryptographically chained records in SQLite WAL mode (`scripts/benchmark-audit-latency.ts`):
+
 | Query Pattern | Index Used | $P_{50}$ (ms) | $P_{95}$ (ms) | Status |
 | :--- | :--- | :---: | :---: | :---: |
 | **Indexed Entity Lookup** | `@@index([entityName, entityId])` | 2.29 | **3.42** | **PASS** |
 | **Timestamp Range Query** | `@@index([timestamp(sort: Desc)])` | 1.07 | **2.40** | **PASS** |
 | **Paginated System Scan** | `@@index([timestamp(sort: Desc)])` | 0.59 | **0.78** | **PASS** |
 
-### NFR-10: Real-Time State Synchronization
+### Client Polling State Synchronization (FR-10 / Performance Architecture §2.5)
+
+- **Quality Attribute**: Client State Consistency (FR-10 FSM Progress UI)
+- **Benchmark Specification**: 5-second polling interval against active contracts (`scripts/benchmark-nfr10-sync.ts`):
+
 | Metric | Measured Value | Target Threshold | Status |
 | :--- | :--- | :--- | :---: |
 | **Snapshot Payload Size** | 1,343 bytes (1.31 KB) | $\le 5,120\text{ bytes}$ (5.0 KB) | **PASS** |
 | **DB Snapshot Query ($P_{95}$)** | 1.70 ms | $\le 15.0\text{ ms}$ | **PASS** |
-| **API Polling Route ($P_{95}$)** | 1.82 ms | $\le 100.0\text{ ms}$ | **PASS** |
+| **API Polling Route Latency ($P_{95}$)** | 1.82 ms | $\le 100.0\text{ ms}$ | **PASS** |
 | **Total 5s Polling Sync ($P_{95}$)** | 5,001.82 ms (5.002 s) | $\le 5,500.0\text{ ms}$ (5.5 s) | **PASS** |
+
+> *Note on NFR-10 (Fault Tolerance)*: Per `docs/requirements/non-functional-requirements.md`, NFR-10 specifies Fault Tolerance (zero unhandled server crashes, standardized JSON error envelopes), verified via defensive Zod boundary validation and error envelope middleware.
 
 ---
 
@@ -213,6 +231,49 @@ The repository maintains strict end-to-end traceability connecting specification
 
 $$\text{Requirement} \to \text{Use Case} \to \text{Acceptance Criteria} \to \text{Engine} \to \text{Source Code} \to \text{Tests} \to \text{Status}$$
 
+### Functional Requirements Baseline (FR-01 to FR-12)
+
+| FR-ID | Title | Owning Engine & Lead | Acceptance Criteria Summary |
+| :--- | :--- | :--- | :--- |
+| **FR-01** | Escrow Fund Locking | Engine 01 (OS · Vaishnavi) | Atomic locking of client funds into escrow vault before work commences; zero double-allocation. |
+| **FR-02** | Milestone State Tracking | Engine 01 (OS · Vaishnavi) | Deterministic sequential milestone FSM transitions (`AWAITING_DEPOSIT` → `FUNDED` → `IN_PROGRESS` → `UNDER_REVIEW` → `RELEASED`). |
+| **FR-03** | Cryptographic Checksums | Engine 02 (DSA/SE · Darshan) | Streaming SHA-256 hash digest computation on all submitted deliverable artifacts. |
+| **FR-04** | Evidence Trees | Engine 02 (DSA/SE · Darshan) | In-memory hierarchical N-ary Merkle evidence tree (`EvidenceTree`) with $O(V+E)$ traversal and tampering detection. |
+| **FR-05** | ACID Payment Processing | Engine 03 (DBMS · Purvi) | Atomic milestone fund releases and refunds with complete rollback protection. |
+| **FR-06** | Tamper-Resistant Audit Log | Engine 03 (DBMS · Purvi) | Append-only audit logging with cryptographic SHA-256 verification hash chaining. |
+| **FR-07** | Role-Based Dashboards | Engine 04 (Web · Vaibhav) | Tailored, role-authorized views for Clients, Freelancers, Dispute Reviewers, and Administrators. |
+| **FR-08** | Authentication & RBAC | Engine 04 (Web · Vaibhav) | HMAC session authentication and server-side RBAC enforcement (HTTP 401/403). |
+| **FR-09** | Dispute Workflow | Engine 04 (Web · Vaibhav) | Structured dispute escalation, counter-evidence submission, and reviewer arbitration. |
+| **FR-10** | FSM Progress UI | Engine 04 (Web · Vaibhav) | Reactive milestone progress visualization with 5-second lightweight polling state updates. |
+| **FR-11** | AI Semantic Matching | Engine 02 (DSA/SE · Darshan primary) / Engine 03 (DBMS · Purvi supporting) | Deterministic multi-attribute heuristic proposal scoring (Jaccard skill similarity 50%, budget fit 30%, reputation 20% per ADR-010). |
+| **FR-12** | Contract Lifecycle Orchestration | Engine 01 (OS · Vaishnavi) | End-to-end contract coordination from proposal acceptance to milestone completion and closure. |
+
+### Non-Functional Requirements Baseline (NFR-01 to NFR-10)
+
+| NFR-ID | Category | Target Quality Attribute | Measurable KPI Target | Status |
+| :--- | :--- | :--- | :--- | :---: |
+| **NFR-01** | Performance | Low-latency response times across REST API routes | $P_{95} \le 500\text{ ms}$ under 50 concurrent requests | **PASS** |
+| **NFR-02** | Security | Least-privilege Role-Based Access Control | 100% of protected routes enforce role authorization | **PASS** |
+| **NFR-03** | Data Integrity | Cryptographic deliverable integrity verification | 100% detection rate for file tampering or hash mismatch | **PASS** |
+| **NFR-04** | Input Validation | Defensive schema validation against malformed payloads | 100% of incoming payloads validated via Zod schemas | **PASS** |
+| **NFR-05** | FSM Reliability | Deterministic, race-condition-free state transitions | 0 invalid or out-of-order state transitions permitted | **PASS** |
+| **NFR-06** | Responsiveness | Cross-device responsive UI layout | Renders without overflow across viewports (360px–1920px) | **PASS** |
+| **NFR-07** | Maintainability | Decoupled modularity across the four course engines | 4 independently testable and ownable engine modules | **PASS** |
+| **NFR-08** | Consistency | ACID transaction compliance across escrow transfers | 0 double-allocation or balance discrepancy anomalies | **PASS** |
+| **NFR-09** | Auditability | Historical traceability for contract changes and rulings | 100% of state transitions captured in append-only audit log | **PASS** |
+| **NFR-10** | Fault Tolerance | Graceful error handling and structured JSON responses | Zero unhandled server crashes; standardized JSON envelopes | **PASS** |
+
+### Use Cases (UC-01 to UC-05)
+
+| Use Case | Title | Primary Actor | Owning Engines | Mapped Requirements |
+| :--- | :--- | :--- | :--- | :--- |
+| **UC-01** | Contract Initiation & Escrow Fund Locking | Client | Engine 01 (OS) & Engine 03 (DBMS) | FR-01, FR-12 \| NFR-05, NFR-08 |
+| **UC-02** | Deliverable Submission & Cryptographic Hashing | Freelancer | Engine 02 (DSA/SE) & Engine 01 (OS) | FR-02, FR-03, FR-04 \| NFR-03 |
+| **UC-03** | Milestone Review & Atomic Escrow Release | Client | Engine 01 (OS) & Engine 03 (DBMS) | FR-02, FR-05 \| NFR-01, NFR-08 |
+| **UC-04** | Dispute Escalation & Evidence Tree Arbitration | Reviewer | Engine 04 (Web) & Engine 02 (DSA/SE) | FR-04, FR-06, FR-09 \| NFR-02, NFR-09 |
+| **UC-05** | AI Semantic Matching & Proposal Bidding | Freelancer / Client | Engine 02 (DSA/SE) & Engine 03 (DBMS) | FR-11 \| NFR-01 |
+
+Detailed traceability specifications:
 - [Requirements Specification](docs/requirements/requirements.md)
 - [Requirements Traceability Matrix (RTM)](docs/development/implementation-traceability.md)
 - [Implementation Audit Report](docs/development/implementation-audit.md)
@@ -222,18 +283,18 @@ $$\text{Requirement} \to \text{Use Case} \to \text{Acceptance Criteria} \to \tex
 ## 11. Project Scope & Boundaries
 
 ### In-Scope Capabilities
-- Role-based user authentication and session authorization
-- Project posting, proposal bidding, and heuristic AI matching
-- Phased milestone management with sequential dependency ordering
-- Simulated double-entry escrow ledger transfers (deposit, release, refund, split)
-- SHA-256 cryptographic deliverable verification
-- In-memory Merkle EvidenceTree dispute representation
-- Independent human reviewer dispute arbitration
-- Append-only hash-chained audit logging
+- Role-based user authentication and session authorization (FR-08, NFR-02)
+- Project posting, proposal bidding, and heuristic semantic proposal matching (FR-11)
+- Phased milestone management with sequential dependency ordering (FR-02, FR-12)
+- Simulated double-entry escrow ledger transfers (FR-01, FR-05, NFR-08)
+- SHA-256 cryptographic deliverable verification (FR-03, NFR-03)
+- In-memory Merkle EvidenceTree dispute representation (FR-04)
+- Independent human reviewer dispute arbitration (FR-09)
+- Append-only hash-chained audit logging (FR-06, NFR-09)
 
 ### Explicit Scope Boundaries
 - **Real Payment Gateways**: Excluded. Currency is purely simulated within the SQLite ledger to eliminate external financial risk.
-- **Autonomous AI Arbitration**: Excluded. AI is restricted to proposal ranking; dispute arbitration requires human reviewer evaluation.
+- **Autonomous AI Arbitration**: Excluded. Algorithmic matching is restricted to proposal ranking; dispute arbitration requires independent human reviewer evaluation.
 - **Native Mobile Applications**: Excluded. Responsive web interface optimized across mobile and desktop viewports.
 - **Legal Court Contracts**: Excluded. The system enforces programmatic protocol invariants, not formal court contracts.
 - **Unlimited Video Hosting**: Excluded. Large media files are represented by cryptographic hash digests.
