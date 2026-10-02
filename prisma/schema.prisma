@@ -1,0 +1,242 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  name          String
+  role          String   // CLIENT | FREELANCER | REVIEWER | ADMIN
+  balance       Float    @default(0.0)
+  githubProfile String?  @map("github_profile")
+  devScore      Int      @default(50) @map("dev_score")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  projects              Project[]
+  proposals             Proposal[]
+  gigs                  Gig[]
+  ordersAsClient        Order[]             @relation("ClientOrders")
+  contractsAsClient     Contract[]          @relation("ClientContracts")
+  contractsAsFreelancer Contract[]          @relation("FreelancerContracts")
+  disputesRaised        Dispute[]           @relation("DisputesRaised")
+  disputesReviewed      Dispute[]           @relation("DisputesReviewed")
+  disputeEvidence       DisputeEvidence[]
+  transactionsFrom      EscrowTransaction[] @relation("TransactionsFrom")
+  transactionsTo        EscrowTransaction[] @relation("TransactionsTo")
+
+  @@index([role])
+  @@map("users")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  title       String
+  description String
+  budget      Float
+  skillTags   String   @map("skill_tags") // JSON Array string: ["react", "node"]
+  status      String   @default("OPEN")   // OPEN | IN_PROGRESS | COMPLETED | CANCELLED
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  client    User       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  proposals Proposal[]
+  contract  Contract?
+
+  @@index([clientId])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("projects")
+}
+
+model Proposal {
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  freelancerId String   @map("freelancer_id")
+  bidAmount    Float    @map("bid_amount")
+  coverLetter  String   @map("cover_letter")
+  aiMatchScore Float    @default(0.0) @map("ai_match_score")
+  status       String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  freelancer User    @relation(fields: [freelancerId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, freelancerId])
+  @@index([projectId, aiMatchScore(sort: Desc)])
+  @@map("proposals")
+}
+
+model Contract {
+  id            String   @id @default(uuid())
+  projectId     String   @unique @map("project_id")
+  clientId      String   @map("client_id")
+  freelancerId  String   @map("freelancer_id")
+  totalAmount   Float    @map("total_amount")
+  escrowBalance Float    @default(0.0) @map("escrow_balance")
+  status        String   @default("AWAITING_DEPOSIT") // FSM state
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  client             User                @relation("ClientContracts", fields: [clientId], references: [id], onDelete: Restrict)
+  freelancer         User                @relation("FreelancerContracts", fields: [freelancerId], references: [id], onDelete: Restrict)
+  milestones         Milestone[]
+  escrowTransactions EscrowTransaction[]
+
+  @@index([clientId])
+  @@index([freelancerId])
+  @@index([status])
+  @@map("contracts")
+}
+
+model Milestone {
+  id             String    @id @default(uuid())
+  contractId     String    @map("contract_id")
+  title          String
+  description    String
+  amount         Float
+  sequenceOrder  Int       @map("sequence_order")
+  status         String    @default("PENDING") // Milestone status
+  dueDate        DateTime  @map("due_date")
+  reviewDeadline DateTime? @map("review_deadline")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  contract           Contract            @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  deliverable        Deliverable?
+  dispute            Dispute?
+  escrowTransactions EscrowTransaction[]
+
+  @@unique([contractId, sequenceOrder])
+  @@index([contractId])
+  @@index([status, reviewDeadline])
+  @@map("milestones")
+}
+
+model Deliverable {
+  id              String   @id @default(uuid())
+  milestoneId     String   @unique @map("milestone_id")
+  fileName        String   @map("file_name")
+  fileUrl         String   @map("file_url")
+  sha256Checksum  String   @map("sha256_checksum")
+  submissionNotes String?  @map("submission_notes")
+  submittedAt     DateTime @default(now()) @map("submitted_at")
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Restrict)
+
+  @@map("deliverables")
+}
+
+model Dispute {
+  id          String    @id @default(uuid())
+  milestoneId String    @unique @map("milestone_id")
+  raisedById  String    @map("raised_by_id")
+  reviewerId  String?   @map("reviewer_id")
+  reason      String
+  status      String    @default("OPEN") // OPEN | UNDER_REVIEW | RESOLVED | REJECTED
+  ruling      String?   // RELEASE_TO_FREELANCER | REFUND_TO_CLIENT
+  rulingNotes String?   @map("ruling_notes")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  milestone     Milestone         @relation(fields: [milestoneId], references: [id], onDelete: Restrict)
+  raisedBy      User              @relation("DisputesRaised", fields: [raisedById], references: [id], onDelete: Restrict)
+  reviewer      User?             @relation("DisputesReviewed", fields: [reviewerId], references: [id], onDelete: Restrict)
+  evidenceItems DisputeEvidence[]
+
+  @@index([status])
+  @@map("disputes")
+}
+
+model DisputeEvidence {
+  id             String   @id @default(uuid())
+  disputeId      String   @map("dispute_id")
+  submittedById  String   @map("submitted_by_id")
+  fileUrl        String   @map("file_url")
+  sha256Checksum String   @map("sha256_checksum")
+  description    String
+  submittedAt    DateTime @default(now()) @map("submitted_at")
+
+  dispute     Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  submittedBy User    @relation(fields: [submittedById], references: [id], onDelete: Restrict)
+
+  @@index([disputeId])
+  @@map("dispute_evidence")
+}
+
+model EscrowTransaction {
+  id          String   @id @default(uuid())
+  contractId  String   @map("contract_id")
+  milestoneId String?  @map("milestone_id")
+  fromUserId  String?  @map("from_user_id")
+  toUserId    String?  @map("to_user_id")
+  amount      Float
+  type        String   // DEPOSIT | LOCK | RELEASE | REFUND
+  status      String   @default("COMPLETED") // PENDING | COMPLETED | FAILED
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  contract  Contract   @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: Restrict)
+  fromUser  User?      @relation("TransactionsFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUser    User?      @relation("TransactionsTo", fields: [toUserId], references: [id], onDelete: Restrict)
+
+  @@index([contractId, createdAt])
+  @@map("escrow_transactions")
+}
+
+model AuditLog {
+  id               String   @id @default(uuid())
+  actorId          String   @map("actor_id")
+  entityName       String   @map("entity_name")
+  entityId         String   @map("entity_id")
+  action           String
+  previousState    String?  @map("previous_state")
+  newState         String   @map("new_state")
+  prevHash         String   @default("GENESIS") @map("prev_hash")
+  verificationHash String   @map("verification_hash")
+  timestamp        DateTime @default(now())
+
+  @@index([entityName, entityId])
+  @@index([timestamp(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model Gig {
+  id           String   @id @default(uuid())
+  freelancerId String   @map("freelancer_id")
+  title        String
+  description  String
+  category     String
+  tiers        String   // JSON string: Basic, Standard, Premium
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  freelancer User    @relation(fields: [freelancerId], references: [id], onDelete: Restrict)
+  orders     Order[]
+
+  @@index([category])
+  @@map("gigs")
+}
+
+model Order {
+  id        String   @id @default(uuid())
+  gigId     String   @map("gig_id")
+  clientId  String   @map("client_id")
+  tierName  String   @map("tier_name")
+  amount    Float
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  gig    Gig  @relation(fields: [gigId], references: [id], onDelete: Restrict)
+  client User @relation("ClientOrders", fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@map("orders")
+}
