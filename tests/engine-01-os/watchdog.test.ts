@@ -54,7 +54,7 @@ describe('Engine 01 (OS) — Automated Watchdog Scheduler & Review Timeout (FR-0
     });
   });
 
-  it('should auto-approve an overdue submitted deliverable when 7-day review window expires', async () => {
+  it('should transition overdue submitted deliverable to REVIEW_TIMEOUT when 7-day review window expires', async () => {
     // 8 days ago (expired)
     const pastDeadline = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -75,12 +75,13 @@ describe('Engine 01 (OS) — Automated Watchdog Scheduler & Review Timeout (FR-0
 
     expect(results).toHaveLength(1);
     expect(results[0].milestoneId).toBe(overdueMilestone.id);
-    expect(results[0].autoApproved).toBe(true);
+    expect(results[0].timedOut).toBe(true);
+    expect(results[0].status).toBe('REVIEW_TIMEOUT');
 
     const updated = await prisma.milestone.findUnique({
       where: { id: overdueMilestone.id },
     });
-    expect(updated!.status).toBe('APPROVED');
+    expect(updated!.status).toBe('REVIEW_TIMEOUT');
 
     // Verify cryptographic audit chain integrity was preserved
     const auditStatus = await auditLogger.verifyAuditChain();
@@ -138,5 +139,47 @@ describe('Engine 01 (OS) — Automated Watchdog Scheduler & Review Timeout (FR-0
       where: { id: disputedMilestone.id },
     });
     expect(untouched!.status).toBe('DISPUTED');
+  });
+
+  it('should permit escrow release from REVIEW_TIMEOUT state', async () => {
+    const pastDeadline = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const timedOutMilestone = await prisma.milestone.create({
+      data: {
+        contractId: contract.id,
+        title: 'Timed Out Milestone',
+        description: 'Testing release from REVIEW_TIMEOUT',
+        amount: 500.0,
+        sequenceOrder: 10,
+        status: 'SUBMITTED',
+        dueDate: new Date(),
+        reviewDeadline: pastDeadline,
+      },
+    });
+
+    await watchdog.processOverdueMilestones();
+
+    const inTimeout = await prisma.milestone.findUnique({
+      where: { id: timedOutMilestone.id },
+    });
+    expect(inTimeout!.status).toBe('REVIEW_TIMEOUT');
+
+    // System or Client triggers release from REVIEW_TIMEOUT
+    const { LedgerCoordinator } = await import('@/core/engine-03-dbms/ledger');
+    const ledger = new LedgerCoordinator();
+    const receipt = await ledger.releaseMilestoneEscrow({
+      contractId: contract.id,
+      milestoneId: timedOutMilestone.id,
+      freelancerId: devUser.id,
+      amount: 500.0,
+      actorId: 'SYSTEM',
+    });
+
+    expect(receipt.success).toBe(true);
+
+    const released = await prisma.milestone.findUnique({
+      where: { id: timedOutMilestone.id },
+    });
+    expect(released!.status).toBe('RELEASED');
   });
 });

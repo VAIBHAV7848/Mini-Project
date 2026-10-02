@@ -36,10 +36,20 @@ describe('Engine 01 (OS) — Escrow FSM Validator', () => {
     expect(result.nextState).toBe('APPROVED');
   });
 
-  it('should allow TIMEOUT_WATCHDOG from UNDER_REVIEW to APPROVED by SYSTEM', () => {
+  it('should allow TIMEOUT_WATCHDOG from UNDER_REVIEW to REVIEW_TIMEOUT by SYSTEM', () => {
     const result = fsm.validateTransition('UNDER_REVIEW', 'TIMEOUT_WATCHDOG', 'SYSTEM');
     expect(result.allowed).toBe(true);
-    expect(result.nextState).toBe('APPROVED');
+    expect(result.nextState).toBe('REVIEW_TIMEOUT');
+  });
+
+  it('should allow RELEASE_ESCROW and RAISE_DISPUTE from REVIEW_TIMEOUT', () => {
+    const resultRelease = fsm.validateTransition('REVIEW_TIMEOUT', 'RELEASE_ESCROW', 'SYSTEM');
+    expect(resultRelease.allowed).toBe(true);
+    expect(resultRelease.nextState).toBe('RELEASED');
+
+    const resultDispute = fsm.validateTransition('REVIEW_TIMEOUT', 'RAISE_DISPUTE', 'CLIENT');
+    expect(resultDispute.allowed).toBe(true);
+    expect(resultDispute.nextState).toBe('DISPUTED');
   });
 
   it('should allow RELEASE_ESCROW from APPROVED to RELEASED by CLIENT or SYSTEM', () => {
