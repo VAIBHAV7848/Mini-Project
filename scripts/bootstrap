@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================================
+# scripts/bootstrap - Bootstrap Development Environment & Check Host Tooling
+# ==============================================================================
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo "==> Bootstrapping engineering environment in: ${PROJECT_ROOT}"
+
+# 1. Verify Host Prerequisites
+echo "--> Checking host prerequisites..."
+FAILED=0
+
+check_tool() {
+  local tool="$1"
+  local cmd="$2"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    local version
+    version=$($cmd --version 2>&1 | head -n 1)
+    echo "  [OK] $tool: $version"
+  else
+    echo "  [MISSING] $tool ($cmd not found in PATH)"
+    FAILED=1
+  fi
+}
+
+check_tool "Git" "git"
+check_tool "Python 3" "python3"
+check_tool "Node.js" "node"
+check_tool "NPM" "npm"
+check_tool "Docker" "docker"
+check_tool "GitHub CLI" "gh"
+check_tool "Antigravity CLI" "agy"
+
+# 2. Check Git Repo Status
+echo "--> Verifying Git repository..."
+if [ -d "${PROJECT_ROOT}/.git" ]; then
+  BRANCH=$(git -C "${PROJECT_ROOT}" branch --show-current 2>/dev/null || echo "unborn")
+  echo "  [OK] Git initialized on branch: ${BRANCH}"
+else
+  echo "  [FAIL] .git directory missing from project root!"
+  FAILED=1
+fi
+
+# 3. Check Core Directories
+echo "--> Checking directory skeleton..."
+REQUIRED_DIRS=(
+  ".agents/skills"
+  ".github/workflows"
+  "docs/architecture"
+  "docs/decisions"
+  "docs/requirements"
+  "docs/api"
+  "docs/database"
+  "docs/development"
+  "docs/security"
+  "docs/research"
+  "src"
+  "tests"
+  "scripts"
+  "infrastructure"
+  "config"
+)
+
+for dir in "${REQUIRED_DIRS[@]}"; do
+  if [ ! -d "${PROJECT_ROOT}/${dir}" ]; then
+    echo "  [MISSING] Directory: ${dir}"
+    FAILED=1
+  fi
+done
+
+if [ "$FAILED" -ne 0 ]; then
+  echo "==> Bootstrap check failed with missing components."
+  exit 1
+fi
+
+echo "==> Bootstrap check completed successfully."
+exit 0

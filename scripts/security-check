@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================================
+# scripts/security-check - Scan for Hardcoded Secrets, Insecure Permissions & Leaks
+# ==============================================================================
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo "==> Running security checks in: ${PROJECT_ROOT}"
+
+VIOLATIONS=0
+
+# 1. Check for Unintended .env Files Tracked in Git
+echo "--> Checking for committed environment files..."
+if git -C "${PROJECT_ROOT}" ls-files | grep -E "(^|/)\.env(\..+)?$" | grep -v "\.env\.example$" >/dev/null 2>&1; then
+  echo "  [ALERT] Committed .env file detected in Git index!"
+  VIOLATIONS=$((VIOLATIONS + 1))
+else
+  echo "  [PASS] No committed .env files found."
+fi
+
+# 2. Check for Private Keys or Certificates
+echo "--> Scanning for private keys and certificates..."
+KEY_MATCHES=$(git -C "${PROJECT_ROOT}" grep -I -i -E "(BEGIN (RSA|OPENSSH|DSA|EC|PGP) PRIVATE KEY)" 2>/dev/null || true)
+if [ -n "$KEY_MATCHES" ]; then
+  echo "  [ALERT] Private key pattern detected!"
+  echo "$KEY_MATCHES"
+  VIOLATIONS=$((VIOLATIONS + 1))
+else
+  echo "  [PASS] No private key patterns detected."
+fi
+
+# 3. Check for Suspicious API Tokens / Secrets
+echo "--> Scanning for obvious exposed API keys and secrets..."
+SECRET_PATTERNS="(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{82}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z-_]{35}|xox[baprs]-[0-9a-zA-Z]{10,48})"
+SECRET_MATCHES=$(git -C "${PROJECT_ROOT}" grep -I -E "$SECRET_PATTERNS" 2>/dev/null || true)
+if [ -n "$SECRET_MATCHES" ]; then
+  echo "  [ALERT] Potential live API token detected!"
+  echo "$SECRET_MATCHES"
+  VIOLATIONS=$((VIOLATIONS + 1))
+else
+  echo "  [PASS] No live API token patterns detected."
+fi
+
+# 4. Check for World-Writable Files
+echo "--> Checking for world-writable sensitive files..."
+WRITABLE=$(find "${PROJECT_ROOT}" -type f -perm -002 ! -path '*/.git/*' 2>/dev/null || true)
+if [ -n "$WRITABLE" ]; then
+  echo "  [ALERT] World-writable file(s) found:"
+  echo "$WRITABLE"
+  VIOLATIONS=$((VIOLATIONS + 1))
+else
+  echo "  [PASS] File permissions secure."
+fi
+
+if [ "$VIOLATIONS" -gt 0 ]; then
+  echo "==> Security check FAILED with $VIOLATIONS violation(s)."
+  exit 1
+fi
+
+echo "==> Security checks passed."
+exit 0

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================================
+# scripts/verify - Full Repository Verification Gate
+# ==============================================================================
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo "==> Running full verification gate in: ${PROJECT_ROOT}"
+
+# 1. Bootstrap verification
+"${PROJECT_ROOT}/scripts/bootstrap"
+
+# 2. Linting verification
+"${PROJECT_ROOT}/scripts/lint"
+
+# 3. Security verification
+"${PROJECT_ROOT}/scripts/security-check"
+
+# 4. ADR and Documentation presence verification
+echo "--> Verifying critical documentation files..."
+DOC_FILES=(
+  "README.md"
+  "AGENTS.md"
+  "CONTRIBUTING.md"
+  "SECURITY.md"
+  "LICENSE"
+  ".gitignore"
+  ".editorconfig"
+  "docs/architecture/architecture.md"
+  "docs/decisions/ADR-000-template.md"
+  "docs/requirements/requirements.md"
+  "docs/development/development-process.md"
+  "docs/development/testing-strategy.md"
+  "docs/development/project-status.md"
+  "docs/development/ai-development-protocol.md"
+  "docs/security/security-model.md"
+  "docs/database/schema.md"
+  "docs/api/api-design.md"
+)
+
+for file in "${DOC_FILES[@]}"; do
+  if [ ! -f "${PROJECT_ROOT}/${file}" ]; then
+    echo "  [FAIL] Missing required file: ${file}"
+    exit 1
+  fi
+done
+echo "  [PASS] All critical documentation files verified."
+
+echo "==> ALL VERIFICATION CHECKS PASSED SUCCESSFULLY."
+exit 0
