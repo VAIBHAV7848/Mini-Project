@@ -365,6 +365,19 @@ export class ContractManager {
         throw new AuthorizationError('Only contracted parties can raise a dispute.');
       }
 
+      if (
+        milestone.status === 'RELEASED' ||
+        milestone.status === 'REFUNDED' ||
+        milestone.status === 'DISPUTED' ||
+        milestone.status === 'PENDING'
+      ) {
+        throw new InvalidStateTransitionError(
+          milestone.status,
+          'RAISE_DISPUTE',
+          `Cannot raise dispute on milestone with status '${milestone.status}'.`
+        );
+      }
+
       const dispute = await tx.dispute.create({
         data: {
           milestoneId: input.milestoneId,

@@ -34,11 +34,16 @@ export const contractActionSchema = z.object({
     'RELEASE_ESCROW',
     'RAISE_DISPUTE',
   ]),
-  contractId: z.string().uuid(),
   milestoneId: z.string().uuid().optional(),
   amount: z.number().positive().optional(),
-  deliverableUrl: z.string().url().optional(),
+  fileName: z.string().min(1).optional(),
+  fileUrl: z.string().url().optional(),
+  sha256Checksum: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, 'Must be valid 64-character SHA-256 hexadecimal checksum')
+    .optional(),
   submissionNotes: z.string().optional(),
+  notes: z.string().optional(),
   reason: z.string().optional(),
 });
 

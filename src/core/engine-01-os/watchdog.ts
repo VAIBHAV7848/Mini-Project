@@ -1,6 +1,8 @@
 import prisma from '@/lib/db';
 import { globalEscrowFsm } from './escrow-fsm';
 import { globalKeyedMutex } from './mutex';
+import { globalAuditLogger } from '@/core/engine-03-dbms/audit-logger';
+import { EscrowStatus } from '@/types';
 import { logger } from '@/lib/logger';
 
 export interface WatchdogTimeoutResult {
@@ -14,7 +16,7 @@ export class WatchdogScheduler {
   async processOverdueMilestones(now = new Date()): Promise<WatchdogTimeoutResult[]> {
     const overdueMilestones = await prisma.milestone.findMany({
       where: {
-        status: 'UNDER_REVIEW',
+        status: { in: ['UNDER_REVIEW', 'SUBMITTED'] },
         reviewDeadline: {
           lte: now,
         },
@@ -36,18 +38,21 @@ export class WatchdogScheduler {
           include: { contract: true },
         });
 
-        if (!freshMilestone || freshMilestone.status !== 'UNDER_REVIEW') {
+        if (
+          !freshMilestone ||
+          (freshMilestone.status !== 'UNDER_REVIEW' && freshMilestone.status !== 'SUBMITTED')
+        ) {
           continue;
         }
 
         // Validate FSM transition legality for watchdog auto-approval
         const nextState = globalEscrowFsm.assertValidTransition(
-          'UNDER_REVIEW',
+          freshMilestone.status as EscrowStatus,
           'TIMEOUT_WATCHDOG',
           'SYSTEM'
         );
 
-        // Atomic milestone transition and audit log insertion
+        // Atomic milestone transition and cryptographically chained audit log insertion
         await prisma.$transaction(async (tx) => {
           await tx.milestone.update({
             where: { id: freshMilestone.id },
@@ -57,18 +62,17 @@ export class WatchdogScheduler {
             },
           });
 
-          await tx.auditLog.create({
-            data: {
+          await globalAuditLogger.logAction(
+            {
               actorId: 'SYSTEM_WATCHDOG',
               entityName: 'Milestone',
               entityId: freshMilestone.id,
               action: 'WATCHDOG_TIMEOUT_AUTO_APPROVAL',
-              previousState: 'UNDER_REVIEW',
+              previousState: freshMilestone.status,
               newState: nextState,
-              prevHash: 'GENESIS',
-              verificationHash: 'watchdog_auto_approval_sha256_placeholder',
             },
-          });
+            tx
+          );
         });
 
         logger.info('Watchdog auto-approved milestone due to review timeout expiration', {

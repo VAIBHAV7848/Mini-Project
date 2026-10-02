@@ -1,3 +1,5 @@
+import { ZodError } from 'zod';
+
 export abstract class DomainError extends Error {
   abstract readonly code: string;
   abstract readonly statusCode: number;
@@ -115,6 +117,24 @@ export function formatErrorResponse(error: unknown, requestId = 'req-system') {
           code: error.code,
           message: error.message,
           details: error.details,
+        },
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId,
+        },
+      },
+    };
+  }
+
+  if (error instanceof ZodError) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'Request payload validation failed.',
+          details: error.issues,
         },
         meta: {
           timestamp: new Date().toISOString(),

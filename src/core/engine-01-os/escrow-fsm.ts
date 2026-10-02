@@ -51,6 +51,12 @@ export class EscrowFsmValidator {
     },
     {
       from: 'SUBMITTED',
+      action: 'TIMEOUT_WATCHDOG',
+      allowedRoles: ['SYSTEM'],
+      to: 'APPROVED',
+    },
+    {
+      from: 'SUBMITTED',
       action: 'RAISE_DISPUTE',
       allowedRoles: ['CLIENT'],
       to: 'DISPUTED',

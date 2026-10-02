@@ -7,7 +7,8 @@ import { globalKeyedMutex } from '@/core/engine-01-os/mutex';
 import { globalEscrowFsm } from '@/core/engine-01-os/escrow-fsm';
 import { globalLedgerCoordinator } from '@/core/engine-03-dbms/ledger';
 import { globalContractManager } from '@/core/engine-03-dbms/contract-manager';
-import { formatSuccessResponse, formatErrorResponse, NotFoundError, ValidationError } from '@/lib/errors';
+import { formatSuccessResponse, formatErrorResponse, NotFoundError, ValidationError, AuthorizationError } from '@/lib/errors';
+import { contractActionSchema } from '@/lib/validation';
 import { ContractAction, EscrowStatus } from '@/types';
 
 export async function GET(
@@ -48,9 +49,10 @@ export async function POST(
 
     RbacEnforcer.enforceContractAccess(session, contract);
 
-    const body = await request.json();
-    const action = body.action as ContractAction;
-    const milestoneId = body.milestoneId as string | undefined;
+    const rawBody = await request.json();
+    const validated = contractActionSchema.parse(rawBody);
+    const action = validated.action as ContractAction;
+    const milestoneId = validated.milestoneId;
 
     // Mutex locking on milestone or contract
     const lockKey = milestoneId || contractId;
@@ -60,6 +62,9 @@ export async function POST(
       switch (action) {
         case 'DEPOSIT': {
           RbacEnforcer.enforceRole(session, ['CLIENT', 'ADMIN']);
+          if (session.role === 'CLIENT' && session.userId !== contract.clientId) {
+            throw new AuthorizationError('Only the contracted client can deposit escrow funds.');
+          }
           globalEscrowFsm.assertValidTransition(
             contract.status as EscrowStatus,
             'DEPOSIT',
@@ -67,7 +72,7 @@ export async function POST(
           );
           const receipt = await globalLedgerCoordinator.depositEscrow({
             contractId,
-            clientId: session.userId,
+            clientId: contract.clientId,
             amount: contract.totalAmount,
           });
           return NextResponse.json(formatSuccessResponse(receipt));
@@ -82,14 +87,17 @@ export async function POST(
 
         case 'SUBMIT_DELIVERABLE': {
           if (!milestoneId) throw new ValidationError('milestoneId is required to submit deliverable.');
+          if (!validated.sha256Checksum) {
+            throw new ValidationError('sha256Checksum is required for deliverable submission.');
+          }
           RbacEnforcer.enforceRole(session, ['FREELANCER', 'ADMIN']);
           const updated = await globalContractManager.submitMilestoneDeliverable({
             milestoneId,
             freelancerId: session.userId,
-            fileName: body.fileName || 'deliverable-archive.zip',
-            fileUrl: body.fileUrl || 'https://storage.local/deliverable.zip',
-            sha256Checksum: body.sha256Checksum || '0'.repeat(64),
-            submissionNotes: body.notes,
+            fileName: validated.fileName || 'deliverable-archive.zip',
+            fileUrl: validated.fileUrl || 'https://storage.local/deliverable.zip',
+            sha256Checksum: validated.sha256Checksum,
+            submissionNotes: validated.notes || validated.submissionNotes,
           });
           return NextResponse.json(formatSuccessResponse(updated));
         }
@@ -107,6 +115,9 @@ export async function POST(
         case 'RELEASE_ESCROW': {
           if (!milestoneId) throw new ValidationError('milestoneId is required.');
           RbacEnforcer.enforceRole(session, ['CLIENT', 'ADMIN']);
+          if (session.role === 'CLIENT' && session.userId !== contract.clientId) {
+            throw new AuthorizationError('Only the contracted client can authorize escrow release.');
+          }
           const milestone = await prisma.milestone.findUnique({ where: { id: milestoneId } });
           if (!milestone) throw new NotFoundError('Milestone', milestoneId);
 
@@ -125,7 +136,7 @@ export async function POST(
           const dispute = await globalContractManager.raiseMilestoneDispute({
             milestoneId,
             raisedById: session.userId,
-            reason: body.reason || 'Deliverable failed to fulfill acceptance criteria.',
+            reason: validated.reason || 'Deliverable failed to fulfill acceptance criteria.',
           });
           return NextResponse.json(formatSuccessResponse(dispute), { status: 201 });
         }
