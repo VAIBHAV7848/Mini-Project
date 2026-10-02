@@ -145,6 +145,10 @@ Managed by designated student owners covering milestone ambiguity (R1 · Vaibhav
 ---
 
 ## 13. Evaluator Defense Cheat Sheet & Review Checklist
-- [gate-1-defense-cheat-sheet.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-defense-cheat-sheet.md): Concise answers to the 20 most critical evaluator questions.
+- [gate-1-mock-viva.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-mock-viva.md): Comprehensive 22-question mock viva voce guide with evidence and follow-ups.
+- [gate-1-team-rehearsal.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-team-rehearsal.md): Individual defense rehearsals organized by team member and engine.
+- [gate-1-timed-presentation.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-timed-presentation.md): Delivery sequence with adaptable timing models and speaker handovers.
+- [gate-1-team-checklist.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-team-checklist.md): Master readiness checklist across all foundational concepts.
+- [gate-1-defense-cheat-sheet.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-defense-cheat-sheet.md): Concise answers to the 22 most critical evaluator questions.
 - [gate-1-final-checklist.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-final-checklist.md): 13-point Gate 1 readiness verification checklist.
 - [gate-1-adversarial-review.md](file:///home/nethunter/Collage/BIG_PROJECT/docs/requirements/gate-1-adversarial-review.md): Complete adversarial audit report.
