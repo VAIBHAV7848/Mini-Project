@@ -1,6 +1,7 @@
 import prisma from '@/lib/db';
 import { AuditLogger, globalAuditLogger } from '@/core/engine-03-dbms/audit-logger';
 import { LedgerCoordinator, globalLedgerCoordinator } from '@/core/engine-03-dbms/ledger';
+import { globalEvidenceTreeManager, EvidenceNodeType } from '@/core/engine-02-dsa-se/evidence-tree';
 import {
   NotFoundError,
   ValidationError,
@@ -207,6 +208,23 @@ export class ContractManager {
         milestone.status,
         'START_WORK',
         `Milestone must be in FUNDED state to begin work.`
+      );
+    }
+
+    // Milestone sequencing guard (FR-12): Preceding milestones must be RELEASED or REFUNDED
+    const priorIncomplete = await prisma.milestone.findFirst({
+      where: {
+        contractId: milestone.contractId,
+        sequenceOrder: { lt: milestone.sequenceOrder },
+        status: { notIn: ['RELEASED', 'REFUNDED'] },
+      },
+    });
+
+    if (priorIncomplete) {
+      throw new InvalidStateTransitionError(
+        milestone.status,
+        'START_WORK',
+        `Preceding milestone #${priorIncomplete.sequenceOrder} is '${priorIncomplete.status}'. All prior milestones must be RELEASED or REFUNDED before starting milestone #${milestone.sequenceOrder}.`
       );
     }
 
@@ -430,6 +448,14 @@ export class ContractManager {
       throw new NotFoundError('Dispute', input.disputeId);
     }
 
+    if (dispute.status === 'RESOLVED') {
+      throw new InvalidStateTransitionError(
+        dispute.status,
+        input.ruling,
+        'Dispute is already resolved with a binding ruling.'
+      );
+    }
+
     const reviewer = await prisma.user.findUnique({
       where: { id: input.reviewerId },
     });
@@ -478,6 +504,164 @@ export class ContractManager {
         reason: input.rulingNotes,
       });
     }
+  }
+
+  /**
+   * Adds counter-evidence or supporting artifacts to an active dispute.
+   */
+  async addDisputeEvidence(input: {
+    disputeId: string;
+    submittedById: string;
+    fileUrl: string;
+    sha256Checksum: string;
+    description: string;
+  }) {
+    const dispute = await prisma.dispute.findUnique({
+      where: { id: input.disputeId },
+      include: {
+        milestone: {
+          include: { contract: true },
+        },
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundError('Dispute', input.disputeId);
+    }
+
+    if (dispute.status === 'RESOLVED') {
+      throw new InvalidStateTransitionError(
+        dispute.status,
+        'ADD_EVIDENCE',
+        'Cannot submit evidence to an already resolved dispute.'
+      );
+    }
+
+    const isParty =
+      dispute.milestone.contract.clientId === input.submittedById ||
+      dispute.milestone.contract.freelancerId === input.submittedById;
+
+    const user = await prisma.user.findUnique({ where: { id: input.submittedById } });
+    if (!isParty && user?.role !== 'ADMIN') {
+      throw new AuthorizationError('Only contracted parties or administrators can submit dispute evidence.');
+    }
+
+    if (!/^[a-f0-9]{64}$/i.test(input.sha256Checksum)) {
+      throw new ValidationError('sha256Checksum must be a valid 64-character hexadecimal digest.');
+    }
+
+    const evidence = await prisma.disputeEvidence.create({
+      data: {
+        disputeId: input.disputeId,
+        submittedById: input.submittedById,
+        fileUrl: input.fileUrl,
+        sha256Checksum: input.sha256Checksum.toLowerCase(),
+        description: input.description,
+      },
+      include: {
+        submittedBy: {
+          select: { id: true, name: true, role: true },
+        },
+      },
+    });
+
+    await this.auditLogger.logAction({
+      actorId: input.submittedById,
+      entityName: 'DisputeEvidence',
+      entityId: evidence.id,
+      action: 'ADD_DISPUTE_EVIDENCE',
+      previousState: dispute.status,
+      newState: dispute.status,
+    });
+
+    return evidence;
+  }
+
+  /**
+   * Constructs an in-memory N-ary EvidenceTree (Engine 02 · Darshan Kittur)
+   * for a dispute and verifies Merkle hash integrity.
+   */
+  async getDisputeWithEvidenceTree(disputeId: string) {
+    const dispute = await prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        raisedBy: { select: { id: true, name: true, role: true } },
+        reviewer: { select: { id: true, name: true } },
+        milestone: {
+          include: {
+            deliverable: true,
+            contract: {
+              select: {
+                id: true,
+                status: true,
+                totalAmount: true,
+                escrowBalance: true,
+                client: { select: { id: true, name: true } },
+                freelancer: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+        evidenceItems: {
+          include: {
+            submittedBy: { select: { id: true, name: true, role: true } },
+          },
+          orderBy: { submittedAt: 'asc' },
+        },
+      },
+    });
+
+    if (!dispute) {
+      throw new NotFoundError('Dispute', disputeId);
+    }
+
+    // Construct in-memory N-ary EvidenceTree (Engine 02)
+    const tree = globalEvidenceTreeManager.createRoot(
+      dispute.id,
+      `Dispute for Milestone: ${dispute.milestone.title}`
+    );
+
+    // Add deliverable as child node if present
+    if (dispute.milestone.deliverable) {
+      globalEvidenceTreeManager.addNode(tree, {
+        id: dispute.milestone.deliverable.id,
+        type: EvidenceNodeType.DELIVERABLE,
+        title: `Deliverable: ${dispute.milestone.deliverable.fileName}`,
+        metadata: {
+          fileUrl: dispute.milestone.deliverable.fileUrl,
+          submittedAt: dispute.milestone.deliverable.submittedAt.toISOString(),
+        },
+        payload: dispute.milestone.deliverable.sha256Checksum,
+      });
+    }
+
+    // Add each evidence item as a child node
+    for (const item of dispute.evidenceItems) {
+      globalEvidenceTreeManager.addNode(tree, {
+        id: item.id,
+        type: EvidenceNodeType.COMMUNICATION,
+        title: item.description,
+        metadata: {
+          submittedBy: item.submittedBy.name,
+          role: item.submittedBy.role,
+          fileUrl: item.fileUrl,
+          submittedAt: item.submittedAt.toISOString(),
+        },
+        payload: item.sha256Checksum,
+      });
+    }
+
+    // Compute Merkle root hash and verify tree integrity
+    const rootHash = globalEvidenceTreeManager.computeMerkleHashes(tree);
+    const verification = globalEvidenceTreeManager.verifyTreeIntegrity(tree);
+
+    return {
+      dispute,
+      evidenceTree: tree,
+      rootHash,
+      isTampered: !verification.isValid,
+      tamperedNodeIds: verification.tamperedNodeIds,
+    };
   }
 }
 

@@ -53,7 +53,7 @@ export class EscrowFsmValidator {
       from: 'SUBMITTED',
       action: 'TIMEOUT_WATCHDOG',
       allowedRoles: ['SYSTEM'],
-      to: 'APPROVED',
+      to: 'REVIEW_TIMEOUT',
     },
     {
       from: 'SUBMITTED',
@@ -71,13 +71,31 @@ export class EscrowFsmValidator {
       from: 'UNDER_REVIEW',
       action: 'TIMEOUT_WATCHDOG',
       allowedRoles: ['SYSTEM'],
-      to: 'APPROVED',
+      to: 'REVIEW_TIMEOUT',
     },
     {
       from: 'UNDER_REVIEW',
       action: 'RAISE_DISPUTE',
       allowedRoles: ['CLIENT', 'FREELANCER'],
       to: 'DISPUTED',
+    },
+    {
+      from: 'REVIEW_TIMEOUT',
+      action: 'RELEASE_ESCROW',
+      allowedRoles: ['CLIENT', 'SYSTEM'],
+      to: 'RELEASED',
+    },
+    {
+      from: 'REVIEW_TIMEOUT',
+      action: 'RAISE_DISPUTE',
+      allowedRoles: ['CLIENT', 'FREELANCER'],
+      to: 'DISPUTED',
+    },
+    {
+      from: 'REVIEW_TIMEOUT',
+      action: 'APPROVE_MILESTONE',
+      allowedRoles: ['CLIENT'],
+      to: 'APPROVED',
     },
     {
       from: 'APPROVED',

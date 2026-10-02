@@ -8,7 +8,9 @@ import { logger } from '@/lib/logger';
 export interface WatchdogTimeoutResult {
   milestoneId: string;
   contractId: string;
-  autoApproved: boolean;
+  timedOut: boolean;
+  status: EscrowStatus;
+  autoApproved?: boolean; // backwards compatibility
   error?: string;
 }
 
@@ -45,7 +47,7 @@ export class WatchdogScheduler {
           continue;
         }
 
-        // Validate FSM transition legality for watchdog auto-approval
+        // Validate FSM transition legality for watchdog review timeout (returns REVIEW_TIMEOUT)
         const nextState = globalEscrowFsm.assertValidTransition(
           freshMilestone.status as EscrowStatus,
           'TIMEOUT_WATCHDOG',
@@ -67,7 +69,7 @@ export class WatchdogScheduler {
               actorId: 'SYSTEM_WATCHDOG',
               entityName: 'Milestone',
               entityId: freshMilestone.id,
-              action: 'WATCHDOG_TIMEOUT_AUTO_APPROVAL',
+              action: 'WATCHDOG_REVIEW_TIMEOUT',
               previousState: freshMilestone.status,
               newState: nextState,
             },
@@ -75,7 +77,7 @@ export class WatchdogScheduler {
           );
         });
 
-        logger.info('Watchdog auto-approved milestone due to review timeout expiration', {
+        logger.info('Watchdog transitioned milestone to REVIEW_TIMEOUT due to review deadline expiration', {
           service: 'engine-01-os',
           milestoneId: freshMilestone.id,
           contractId: freshMilestone.contractId,
@@ -84,6 +86,8 @@ export class WatchdogScheduler {
         results.push({
           milestoneId: freshMilestone.id,
           contractId: freshMilestone.contractId,
+          timedOut: true,
+          status: nextState,
           autoApproved: true,
         });
       } catch (err: unknown) {
@@ -96,6 +100,8 @@ export class WatchdogScheduler {
         results.push({
           milestoneId: milestone.id,
           contractId: milestone.contractId,
+          timedOut: false,
+          status: milestone.status as EscrowStatus,
           autoApproved: false,
           error: errorMsg,
         });

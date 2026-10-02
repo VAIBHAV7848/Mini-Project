@@ -34,6 +34,7 @@ export const contractActionSchema = z.object({
     'RELEASE_ESCROW',
     'RAISE_DISPUTE',
   ]),
+  contractId: z.string().uuid().optional(),
   milestoneId: z.string().uuid().optional(),
   amount: z.number().positive().optional(),
   fileName: z.string().min(1).optional(),
@@ -77,4 +78,12 @@ export const placeOrderSchema = z.object({
   gigId: z.string().uuid(),
   tierName: z.string().min(1),
   amount: z.number().positive(),
+});
+
+export const addEvidenceSchema = z.object({
+  fileUrl: z.string().url(),
+  sha256Checksum: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, 'Must be valid 64-character SHA-256 hexadecimal checksum'),
+  description: z.string().min(5),
 });

@@ -182,11 +182,15 @@ export class LedgerCoordinator {
         throw new NotFoundError('Milestone', input.milestoneId);
       }
 
-      if (milestone.status !== 'APPROVED' && milestone.status !== 'DISPUTED') {
+      if (
+        milestone.status !== 'APPROVED' &&
+        milestone.status !== 'DISPUTED' &&
+        milestone.status !== 'REVIEW_TIMEOUT'
+      ) {
         throw new InvalidStateTransitionError(
           milestone.status,
           'RELEASE_ESCROW',
-          `Cannot release escrow for milestone with status '${milestone.status}'. Must be APPROVED or DISPUTED.`
+          `Cannot release escrow for milestone with status '${milestone.status}'. Must be APPROVED, REVIEW_TIMEOUT, or DISPUTED.`
         );
       }
 
@@ -214,15 +218,28 @@ export class LedgerCoordinator {
         },
       });
 
-      // 6. Check contract overall status
+      // 6. Milestone sequencing & contract overall status
       const allMilestones = await tx.milestone.findMany({
         where: { contractId: input.contractId },
+        orderBy: { sequenceOrder: 'asc' },
       });
+
+      // Activate next sequential milestone if pending and covered by remaining escrow
+      const nextMilestone = allMilestones.find(
+        (m) => m.sequenceOrder === milestone.sequenceOrder + 1 && m.status === 'PENDING'
+      );
+      if (nextMilestone && updatedContract.escrowBalance >= nextMilestone.amount) {
+        await tx.milestone.update({
+          where: { id: nextMilestone.id },
+          data: { status: 'FUNDED' },
+        });
+      }
+
       const allResolved = allMilestones.every(
         (m) => m.id === input.milestoneId || m.status === 'RELEASED' || m.status === 'REFUNDED'
       );
 
-      if (allResolved || updatedContract.escrowBalance <= 0) {
+      if (allResolved) {
         await tx.contract.update({
           where: { id: input.contractId },
           data: { status: 'RELEASED' },

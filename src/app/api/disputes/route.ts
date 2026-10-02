@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { SessionService } from '@/core/engine-04-web/session';
+import { RbacEnforcer } from '@/core/engine-04-web/rbac';
+import { fileDisputeSchema } from '@/lib/validation';
+import { globalContractManager } from '@/core/engine-03-dbms/contract-manager';
 import { formatSuccessResponse, formatErrorResponse, AuthenticationError } from '@/lib/errors';
 
 export async function GET(request: Request) {
@@ -57,6 +60,30 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json(formatSuccessResponse(disputes));
+  } catch (error) {
+    const err = formatErrorResponse(error);
+    return NextResponse.json(err.body, { status: err.status });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await SessionService.getSessionFromHeaders(request.headers);
+    if (!session) {
+      throw new AuthenticationError('Authentication required.');
+    }
+    RbacEnforcer.enforceRole(session, ['CLIENT', 'FREELANCER', 'ADMIN']);
+
+    const rawBody = await request.json();
+    const validated = fileDisputeSchema.parse(rawBody);
+
+    const dispute = await globalContractManager.raiseMilestoneDispute({
+      milestoneId: validated.milestoneId,
+      raisedById: session.userId,
+      reason: validated.reason,
+    });
+
+    return NextResponse.json(formatSuccessResponse(dispute), { status: 201 });
   } catch (error) {
     const err = formatErrorResponse(error);
     return NextResponse.json(err.body, { status: err.status });

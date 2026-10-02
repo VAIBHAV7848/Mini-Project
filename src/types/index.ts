@@ -6,6 +6,7 @@ export type EscrowStatus =
   | 'IN_PROGRESS'
   | 'SUBMITTED'
   | 'UNDER_REVIEW'
+  | 'REVIEW_TIMEOUT'
   | 'APPROVED'
   | 'RELEASED'
   | 'REFUNDED'
