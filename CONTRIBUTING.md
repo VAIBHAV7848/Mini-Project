@@ -24,11 +24,16 @@ Thank you for contributing to BIG_PROJECT! We hold high standards for code quali
    git worktree add ../BIG_PROJECT-<branch> -b feature/<branch>
    ```
 3. Use Conventional Commits:
-   - `feat: add user authentication handler`
-   - `fix: resolve token expiry boundary condition`
-   - `test: add unit coverage for escrow state machine`
-   - `docs: update ADR-001 with database rationale`
-   - `refactor: extract validation middleware`
+   - Format: `<type>: <description>` (e.g., `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, `perf:`, `security:`)
+   - Examples:
+     - `feat: implement milestone state validation`
+     - `fix: prevent duplicate escrow allocation`
+     - `test: add escrow timeout coverage`
+     - `docs: update API contract`
+     - `refactor: isolate dispute resolution service`
+   - Describe WHAT changed, not HOW the change was produced.
+   - Never reference AI, agents, or automated generation in commit messages or footers.
+   - Always commit using the repository's configured real developer identity.
 
 ---
 

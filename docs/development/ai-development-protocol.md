@@ -7,7 +7,7 @@ AI agents operating in this repository must function as disciplined senior softw
 
 ---
 
-## 2. The 14-Step Execution Protocol
+## 2. The 15-Step Execution Protocol
 
 ```mermaid
 flowchart TD
@@ -24,6 +24,7 @@ flowchart TD
     K --> L["12. Verify Exit Codes & Evidence"]
     L --> M["13. Update Documentation & ADRs"]
     M --> N["14. Report Terminal Evidence"]
+    N --> O["15. Commit with Real Dev Identity"]
 ```
 
 ---
@@ -74,3 +75,10 @@ Update `docs/development/project-status.md` and relevant technical specs.
 
 ### Step 14: Report Terminal Evidence
 Deliver concise completion summary to the engineer with exact commands and verification evidence. Never claim success without proof.
+
+### Step 15: Commit with Real Dev Identity & Zero AI Attribution
+Follow the mandatory Git Commit Policy:
+- Commits must use Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, etc.).
+- Never mention AI, agents, models, or automated tooling in commit messages or footers.
+- Always commit under the repository's configured real developer identity (`user.name` and `user.email`).
+
